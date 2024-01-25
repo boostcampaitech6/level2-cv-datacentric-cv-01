@@ -121,3 +121,6 @@ data
 *.sh~
 
 # 추가
+code/pths
+code/predictions
+code/wandb
