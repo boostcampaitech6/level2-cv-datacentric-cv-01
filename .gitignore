@@ -122,3 +122,6 @@ data
 
 # 추가
 *.csv
+code/pths
+code/predictions
+code/wandb

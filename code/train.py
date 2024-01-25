@@ -10,6 +10,7 @@ from torch import cuda
 from torch.utils.data import DataLoader
 from torch.optim import lr_scheduler
 from tqdm import tqdm
+import wandb
 
 from east_dataset import EASTDataset
 from dataset import SceneTextDataset
@@ -36,6 +37,10 @@ def parse_args():
     parser.add_argument('--save_interval', type=int, default=5)
     parser.add_argument('--ignore_tags', type=list, default=['masked', 'excluded-region', 'maintable', 'stamp'])
 
+    parser.add_argument('-m', '--mode', type=str, default='on', help='wandb logging mode(on: online, off: disabled)')
+    parser.add_argument('-p', '--project', type=str, default='datacentric', help='wandb project name')
+    parser.add_argument('-d', '--data', default='original', type=str, help='description about dataset')
+
     args = parser.parse_args()
 
     if args.input_size % 32 != 0:
@@ -44,8 +49,8 @@ def parse_args():
     return args
 
 
-def do_training(data_dir, model_dir, device, image_size, input_size, num_workers, batch_size,
-                learning_rate, max_epoch, save_interval, ignore_tags):
+def do_training(args, data_dir, model_dir, device, image_size, input_size, num_workers, batch_size,
+                learning_rate, max_epoch, save_interval, ignore_tags, mode, project, data):
     dataset = SceneTextDataset(
         data_dir,
         split='train',
@@ -68,6 +73,17 @@ def do_training(data_dir, model_dir, device, image_size, input_size, num_workers
     optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate)
     scheduler = lr_scheduler.MultiStepLR(optimizer, milestones=[max_epoch // 2], gamma=0.1)
 
+    # WandB
+    if mode == 'on':
+        wandb.init(
+            project=project,
+            entity='nae-don-nae-san',
+            group=data,
+            name=f'{max_epoch}e_{learning_rate}'
+        )
+        wandb.config.update(args)
+        wandb.watch(model)
+
     model.train()
     for epoch in range(max_epoch):
         epoch_loss, epoch_start = 0, time.time()
@@ -80,15 +96,18 @@ def do_training(data_dir, model_dir, device, image_size, input_size, num_workers
                 loss.backward()
                 optimizer.step()
 
-                loss_val = loss.item()
-                epoch_loss += loss_val
-
+                train_loss = loss.item()
+                epoch_loss += train_loss
                 pbar.update(1)
-                val_dict = {
+                train_dict = {
                     'Cls loss': extra_info['cls_loss'], 'Angle loss': extra_info['angle_loss'],
                     'IoU loss': extra_info['iou_loss']
                 }
-                pbar.set_postfix(val_dict)
+                pbar.set_postfix(train_dict)
+
+                if mode == 'on':    
+                    wandb.log({'train_loss': train_loss, 'cls_loss': extra_info['cls_loss'], 
+                            'angle_loss': extra_info['angle_loss'], 'iou_loss': extra_info['iou_loss']}, step=epoch)
 
         scheduler.step()
 
@@ -102,9 +121,13 @@ def do_training(data_dir, model_dir, device, image_size, input_size, num_workers
             ckpt_fpath = osp.join(model_dir, 'latest.pth')
             torch.save(model.state_dict(), ckpt_fpath)
 
+    if mode == 'on':
+        # wandb.run.summary['best_f1'] = best_f1
+        wandb.alert('Training Task Finished', f"TRAIN_LOSS: {train_loss:.4f}")
+        wandb.finish()
 
 def main(args):
-    do_training(**args.__dict__)
+    do_training(args, **args.__dict__)
 
 
 if __name__ == '__main__':
