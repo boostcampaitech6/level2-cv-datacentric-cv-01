@@ -72,6 +72,7 @@ def do_training(args, data_dir, model_dir, device, image_size, input_size, num_w
     model.to(device)
     optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate)
     scheduler = lr_scheduler.MultiStepLR(optimizer, milestones=[max_epoch // 2], gamma=0.1)
+    scaler = torch.cuda.amp.GradScaler()
 
     # WandB
     if mode == 'on':
@@ -90,12 +91,13 @@ def do_training(args, data_dir, model_dir, device, image_size, input_size, num_w
         with tqdm(total=num_batches) as pbar:
             for img, gt_score_map, gt_geo_map, roi_mask in train_loader:
                 pbar.set_description('[Epoch {}]'.format(epoch + 1))
-
-                loss, extra_info = model.train_step(img, gt_score_map, gt_geo_map, roi_mask)
-                optimizer.zero_grad()
-                loss.backward()
-                optimizer.step()
-
+                with torch.cuda.amp.autocast(enabled=False):
+                    loss, extra_info = model.train_step(img, gt_score_map, gt_geo_map, roi_mask)
+                optimizer.zero_grad(set_to_none=True)
+                scaler.scale(loss).backward()
+                scaler.step(optimizer)
+                scaler.update()
+                
                 train_loss = loss.item()
                 epoch_loss += train_loss
                 pbar.update(1)
