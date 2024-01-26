@@ -29,7 +29,7 @@ def parse_args():
     parser.add_argument('--model_dir', type=str, default=os.environ.get('SM_MODEL_DIR', 'trained_models'))
 
     parser.add_argument('--seed', type=int, default=137)
-    parser.add_argument('--val_interval', type=int, default=1)
+    parser.add_argument('--val_interval', type=int, default=5)
     parser.add_argument('--device', default='cuda' if cuda.is_available() else 'cpu')
     parser.add_argument('--num_workers', type=int, default=8)
     
@@ -57,6 +57,7 @@ def parse_args():
     return args
 
 def do_training(args):
+    
     ### Train Loader ###
     train_dataset = SceneTextDataset(
         args.data_dir,
@@ -76,6 +77,8 @@ def do_training(args):
     )
     
     ### Val Loader ###
+    ''' 아래 코드는 val loss를 위한 코드입니다.'''
+    '''
     val_dataset = SceneTextDataset(
         args.data_dir,
         split='valid_split',
@@ -92,7 +95,8 @@ def do_training(args):
         batch_size=args.batch_size,
         num_workers=args.num_workers
     )
-
+    '''
+    
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
     model = EAST()
     model.to(device)
@@ -172,7 +176,6 @@ def do_training(args):
             with torch.no_grad():
                 
                 ''' 아래 코드는 val loss를 위한 코드입니다.'''
-                
                 '''
                 model.eval()
                 epoch_start = time.time()
@@ -203,13 +206,12 @@ def do_training(args):
                 '''
                 
                 ''' 아래 코드는 val f1 score를 위한 코드입니다. '''
-                
                 print("Calculating validation results...")
                 valid_images = [f for f in os.listdir(osp.join(args.data_dir, 'img/valid_split/')) if f.endswith('.jpg')]
 
                 pred_bboxes_dict = get_pred_bboxes(model, args.data_dir, valid_images, args.input_size, args.batch_size, split='valid_split')            
                 gt_bboxes_dict = get_gt_bboxes(args.data_dir, json_file='ufo/valid_split.json', valid_images=valid_images)
-                
+
                 result = calc_deteval_metrics(pred_bboxes_dict, gt_bboxes_dict)
                 total_result = result['total']
                 precision, recall = total_result['precision'], total_result['recall']
@@ -221,8 +223,8 @@ def do_training(args):
                             'val recall': recall,
                             'val f1_score': f1_score
                         }
-                
-                wandb.log(val_dict, step=epoch)
+                if args.mode == 'on':
+                    wandb.log(val_dict, step=epoch)
                 
                 ### Save Best Model ###
                 if best_f1_score < f1_score:
