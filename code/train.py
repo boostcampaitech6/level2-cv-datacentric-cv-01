@@ -47,7 +47,7 @@ def parse_args():
 
     parser.add_argument("--optimizer", type=str, default='adam', choices=['adam', 'adamW'])
     parser.add_argument("--scheduler", type=str, default='cosine', choices=['multistep', 'cosine'])
-    parser.add_argument("--resume", type=str, default=None, choices=[None, 'resume', 'finetune'])
+    parser.add_argument("--resume", type=str, default=None, choices=[None, 'resume'])
     
     args = parser.parse_args()
 
@@ -104,9 +104,6 @@ def do_training(args):
     ### Resume or finetune ###
     if args.resume == "resume":
         checkpoint = torch.load(osp.join(args.model_dir, "latest.pth"))
-        model.load_state_dict(checkpoint)
-    elif args.resume == "finetune":
-        checkpoint = torch.load(osp.join(args.model_dir, "best.pth"))
         model.load_state_dict(checkpoint)
     
     ### Optimizer ###
