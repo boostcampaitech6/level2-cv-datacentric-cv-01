@@ -72,7 +72,7 @@ def do_training(args):
         
     # pickle 파일로 학습시 pickle 정보가 있는 폴더 경로를 지정해주세요.
     elif args.data == 'pickle':
-        train_dataset = PickleDataset("/data/ephemeral/home/level2-cv-datacentric-cv-01/data/medical/pickle/train")
+        train_dataset = PickleDataset("/data/ephemeral/home/level2-cv-datacentric-cv-01/data/medical/pickle_is[2048]_cs[1024]_aug['CJ', 'GB', 'N']/train")
     
     train_num_batches = math.ceil(len(train_dataset) / args.batch_size)
     train_loader = DataLoader(

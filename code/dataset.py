@@ -345,7 +345,7 @@ class SceneTextDataset(Dataset):
                  ignore_tags=[],
                  ignore_under_threshold=10,
                  drop_under_threshold=1,
-                 custom_transform=[],
+                 custom_transform=None,
                  color_jitter=True,
                  normalize=True):
         if json_name:
@@ -409,6 +409,8 @@ class SceneTextDataset(Dataset):
         funcs = []
         if self.color_jitter:
             funcs.append(A.ColorJitter(0.5, 0.5, 0.5, 0.25))
+        if self.custom_transform:
+            funcs.append(self.custom_transform)
         if self.normalize:
             funcs.append(A.Normalize(mean=(0.5, 0.5, 0.5), std=(0.5, 0.5, 0.5)))
         transform = A.Compose(funcs)
@@ -424,7 +426,7 @@ class PickleDataset(Dataset):
         self.datadir = datadir
         self.to_tensor = to_tensor
         self.datalist = [f for f in os.listdir(datadir) if f.endswith('.pkl')]
-
+ 
     def __getitem__(self, idx):
         with open(file=osp.join(self.datadir, f"{idx}.pkl"), mode="rb") as f:
             data = pickle.load(f)
