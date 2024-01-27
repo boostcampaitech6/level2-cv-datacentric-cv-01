@@ -14,7 +14,7 @@ from tqdm import tqdm
 import wandb
 
 from east_dataset import EASTDataset
-from dataset import SceneTextDataset
+from dataset import SceneTextDataset, PickleDataset
 from model import EAST
 from deteval import calc_deteval_metrics
 from utils import get_gt_bboxes, get_pred_bboxes, seed_everything, AverageMeter
@@ -43,7 +43,7 @@ def parse_args():
 
     parser.add_argument('-m', '--mode', type=str, default='on', help='wandb logging mode(on: online, off: disabled)')
     parser.add_argument('-p', '--project', type=str, default='datacentric', help='wandb project name')
-    parser.add_argument('-d', '--data', default='original', type=str, help='description about dataset')
+    parser.add_argument('-d', '--data', default='pickle', type=str, help='description about dataset', choices=['original', 'pickle'])
 
     parser.add_argument("--optimizer", type=str, default='adam', choices=['adam', 'adamW'])
     parser.add_argument("--scheduler", type=str, default='cosine', choices=['multistep', 'cosine'])
@@ -59,15 +59,21 @@ def parse_args():
 def do_training(args):
     
     ### Train Loader ###
-    train_dataset = SceneTextDataset(
-        args.data_dir,
-        split='train_split',
-        train_val='train_split.json',
-        image_size=args.image_size,
-        crop_size=args.input_size,
-        ignore_tags=args.ignore_tags
-    )
-    train_dataset = EASTDataset(train_dataset)
+    if args.data == 'original':
+        train_dataset = SceneTextDataset(
+            args.data_dir,
+            split='train_split',
+            train_val='train_split.json',
+            image_size=args.image_size,
+            crop_size=args.input_size,
+            ignore_tags=args.ignore_tags
+        )
+        train_dataset = EASTDataset(train_dataset)
+        
+    # pickle 파일로 학습시 pickle 정보가 있는 폴더 경로를 지정해주세요.
+    elif args.data == 'pickle':
+        train_dataset = PickleDataset("/data/ephemeral/home/level2-cv-datacentric-cv-01/data/medical/pickle/train")
+    
     train_num_batches = math.ceil(len(train_dataset) / args.batch_size)
     train_loader = DataLoader(
         train_dataset,
