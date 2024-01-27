@@ -345,6 +345,7 @@ class SceneTextDataset(Dataset):
                  ignore_tags=[],
                  ignore_under_threshold=10,
                  drop_under_threshold=1,
+                 custom_transform=[],
                  color_jitter=True,
                  normalize=True):
         if json_name:
@@ -362,6 +363,8 @@ class SceneTextDataset(Dataset):
 
         self.drop_under_threshold = drop_under_threshold
         self.ignore_under_threshold = ignore_under_threshold
+        
+        self.custom_transform = custom_transform
 
     def __len__(self):
         return len(self.image_fnames)
