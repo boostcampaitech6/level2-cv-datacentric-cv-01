@@ -63,7 +63,7 @@ def do_training(args):
         train_dataset = SceneTextDataset(
             args.data_dir,
             split='train_split',
-            train_val='train_split.json',
+            json_name='train_split.json',
             image_size=args.image_size,
             crop_size=args.input_size,
             ignore_tags=args.ignore_tags

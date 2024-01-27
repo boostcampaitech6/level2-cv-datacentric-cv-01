@@ -14,7 +14,7 @@ def main():
     train_dataset = SceneTextDataset(
             root_dir=data_dir,
             split='train',
-            train_val='train_split.json',
+            json_name='train_split.json',
             image_size=image_size,
             crop_size=crop_size,
             ignore_tags=ignore_tags
