@@ -25,14 +25,14 @@ import numpy as np
 def parse_args():
     parser = ArgumentParser()
 
+     # pkl 데이터셋 경로
+    parser.add_argument('--train_dataset_dir', type=str, default="/data/ephemeral/home/level2-cv-datacentric-cv-01/data/medical/pickle/[2048]_cs[1024]_aug['CJ', 'GB', 'N']/train")
     parser.add_argument('--data_dir', type=str, default=os.environ.get('SM_CHANNEL_TRAIN', '../data/medical'))
     parser.add_argument('--model_dir', type=str, default=os.environ.get('SM_MODEL_DIR', 'trained_models'))
-
     parser.add_argument('--seed', type=int, default=137)
     parser.add_argument('--val_interval', type=int, default=5)
-    parser.add_argument('--device', default='cuda' if cuda.is_available() else 'cpu')
+    parser.add_argument('--device', default='cuda:0' if cuda.is_available() else 'cpu')
     parser.add_argument('--num_workers', type=int, default=8)
-    
     parser.add_argument('--image_size', type=int, default=2048)
     parser.add_argument('--input_size', type=int, default=1024)
     parser.add_argument('--batch_size', type=int, default=4)
@@ -40,16 +40,22 @@ def parse_args():
     parser.add_argument('--max_epoch', type=int, default=150)
     parser.add_argument('--save_interval', type=int, default=1)
     parser.add_argument('--ignore_tags', type=list, default=['masked', 'excluded-region', 'maintable', 'stamp'])
-
     parser.add_argument('-m', '--mode', type=str, default='on', help='wandb logging mode(on: online, off: disabled)')
     parser.add_argument('-p', '--project', type=str, default='datacentric', help='wandb project name')
     parser.add_argument('-d', '--data', default='pickle', type=str, help='description about dataset', choices=['original', 'pickle'])
-
     parser.add_argument("--optimizer", type=str, default='adam', choices=['adam', 'adamW'])
     parser.add_argument("--scheduler", type=str, default='cosine', choices=['multistep', 'cosine'])
     parser.add_argument("--resume", type=str, default=None, choices=[None, 'resume', 'finetune'])
     
     args = parser.parse_args()
+
+    if args.data == 'original':
+        args.data_name = 'original'
+        args.save_dir = os.path.join(args.model_dir, f'{args.max_epoch}e_{args.optimizer}_{args.scheduler}_{args.learning_rate}')
+    elif args.data == 'pickle':
+        args.data_name = args.train_dataset_dir.split('/')[-2]
+        args.save_dir = os.path.join(args.model_dir, f'{args.max_epoch}e_{args.optimizer}_{args.scheduler}_{args.learning_rate}_{args.data_name}')
+    os.makedirs(args.save_dir, exist_ok=True)
 
     if args.input_size % 32 != 0:
         raise ValueError('`input_size` must be a multiple of 32')
@@ -66,20 +72,22 @@ def do_training(args):
             json_name='train_split.json',
             image_size=args.image_size,
             crop_size=args.input_size,
-            ignore_tags=args.ignore_tags
+            ignore_tags=args.ignore_tags,
+            pin_memory=True,
         )
         train_dataset = EASTDataset(train_dataset)
         
-    # pickle 파일로 학습시 pickle 정보가 있는 폴더 경로를 지정해주세요.
     elif args.data == 'pickle':
-        train_dataset = PickleDataset("/data/ephemeral/home/level2-cv-datacentric-cv-01/data/medical/pickle_is[2048]_cs[1024]_aug['CJ', 'GB', 'N']/train")
+        train_dataset = PickleDataset(args.train_dataset_dir)
+        
     
     train_num_batches = math.ceil(len(train_dataset) / args.batch_size)
     train_loader = DataLoader(
         train_dataset,
         batch_size=args.batch_size,
         shuffle=True,
-        num_workers=args.num_workers
+        num_workers=args.num_workers,
+        pin_memory=True
     )
     
     ### Val Loader ###
@@ -103,7 +111,7 @@ def do_training(args):
     )
     '''
     
-    device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+    device = torch.device(args.device if torch.cuda.is_available() else "cpu")
     model = EAST()
     model.to(device)
     
@@ -133,7 +141,7 @@ def do_training(args):
             project=args.project,
             entity='nae-don-nae-san',
             group=args.data,
-            name=f'{args.max_epoch}e_{args.optimizer}_{args.scheduler}_{args.learning_rate}'
+            name=f'{args.max_epoch}e_{args.optimizer}_{args.scheduler}_{args.learning_rate}_{args.data_name}'
         )
         wandb.config.update(args)
         wandb.watch(model)
@@ -146,6 +154,7 @@ def do_training(args):
     val_loss = AverageMeter()
     
     model.train()
+    total_start_time = time.time()
     for epoch in range(args.max_epoch):
         epoch_start = time.time()
         train_loss.reset()
@@ -172,9 +181,11 @@ def do_training(args):
                     wandb.log(train_dict, step=epoch)
 
         scheduler.step()
+        epoch_duration = time.time() - epoch_start
+        
+        # print('Mean loss: {:.4f} | Elapsed time: {} |'.format(
+        #     train_loss.avg, timedelta(seconds=epoch_duration)))
 
-        print('Mean loss: {:.4f} | Elapsed time: {}'.format(
-            train_loss.avg, timedelta(seconds=time.time() - epoch_start)))
 
         ### Val ###
         # 매 val_interval 에폭마다, 마지막 5에폭 이후 validation 수행
@@ -235,29 +246,38 @@ def do_training(args):
                 ### Save Best Model ###
                 if best_f1_score < f1_score:
                     print(f"New best model for f1 score : {f1_score}! saving the best model..")
-                    bestpt_fpath = osp.join(args.model_dir, 'best.pth')
+                    # bestpt_fpath = osp.join(args.model_dir, 'best.pth')
+                    bestpt_fpath = osp.join(args.save_dir, 'best.pth')
                     torch.save(model.state_dict(), bestpt_fpath)
                     best_f1_score = f1_score
 
+            elapsed_time = time.time() - total_start_time
+            estimated_time_left = elapsed_time / (epoch + 1) * (args.max_epoch - epoch - 1)
+            # 예상 종료 시간을 현재 시간 기준으로 변환
+            
+            eta = str(timedelta(seconds=estimated_time_left))
+            print(f'Epoch {epoch + 1} Validation Finised | Left ETA: {eta}')
+        
         # Save the Lastest Model
         if (epoch + 1) % args.save_interval == 0:
-            ckpt_fpath = osp.join(args.model_dir, 'latest.pth')
+            ckpt_fpath = osp.join(args.save_dir, 'latest.pth')
+            # ckpt_fpath = osp.join(args.model_dir, 'latest.pth')
             torch.save(model.state_dict(), ckpt_fpath)
+        
+        total_duration = time.time() - total_start_time
+        print('Mean loss: {:.4f} | Elapsed time: {} |'.format(
+            train_loss.avg, timedelta(seconds=epoch_duration)))
 
     if args.mode == 'on':
         wandb.alert('Training Task Finished', f"TRAIN_LOSS: {train_loss:.4f}")
         wandb.finish()
-
 
 def main(args):
     do_training(args)
 
 if __name__ == '__main__':
     args = parse_args()
-    
+    print(args)
     seed_everything(args.seed)
-    
-    if not osp.exists(args.model_dir):
-        os.makedirs(args.model_dir)
-    
+
     main(args)

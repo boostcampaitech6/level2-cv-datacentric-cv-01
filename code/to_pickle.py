@@ -22,6 +22,7 @@ def main():
                         std=(0.17171108542242774, 0.17888224507630185, 0.18678791254805846), p=1.0)
     }
     
+    # image_size = [1024]
     image_size = [2048]
     crop_size = [1024]
     aug_select = ['CJ','GB','N']
@@ -30,7 +31,8 @@ def main():
     for s in aug_select:
         custom_augmentation.append(custom_augmentation_dict[s])
 
-    pkl_dir = f'pickle_is{image_size}_cs{crop_size}_aug{aug_select}/train/'
+    pkl_dir = f'pickle/{image_size}_cs{crop_size}_aug{aug_select}/train/'
+    # pkl_dir = f'pickle_is{image_size}_cs{crop_size}_aug{aug_select}/train/'
     
     # 경로 폴더 생성
     os.makedirs(osp.join(data_dir, pkl_dir), exist_ok=True)
