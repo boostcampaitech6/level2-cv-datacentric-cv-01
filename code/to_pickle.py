@@ -23,8 +23,8 @@ def main():
     }
     
     # image_size = [1024]
-    image_size = [2048]
-    crop_size = [1024]
+    image_size = [1024, 1536, 2048]
+    crop_size = [256, 512, 1024, 2048]
     aug_select = ['CJ','GB','N']
     
     custom_augmentation = []
@@ -39,6 +39,8 @@ def main():
     
     for i, i_size in enumerate(image_size):
         for j, c_size in enumerate(crop_size):
+            if c_size > i_size:
+                continue
             train_dataset = SceneTextDataset(
                     root_dir=data_dir,
                     split='train',

@@ -117,10 +117,10 @@ def do_training(args):
     
     ### Resume or finetune ###
     if args.resume == "resume":
-        checkpoint = torch.load(osp.join(args.model_dir, "latest.pth"))
+        checkpoint = torch.load(osp.join(args.save_dir, "latest.pth"))
         model.load_state_dict(checkpoint)
     elif args.resume == "finetune":
-        checkpoint = torch.load(osp.join(args.model_dir, "best.pth"))
+        checkpoint = torch.load(osp.join(args.save_dir, "best.pth"))
         model.load_state_dict(checkpoint)
     
     ### Optimizer ###
@@ -183,9 +183,8 @@ def do_training(args):
         scheduler.step()
         epoch_duration = time.time() - epoch_start
         
-        # print('Mean loss: {:.4f} | Elapsed time: {} |'.format(
-        #     train_loss.avg, timedelta(seconds=epoch_duration)))
-
+        print('Mean loss: {:.4f} | Elapsed time: {} |'.format(
+            train_loss.avg, timedelta(seconds=epoch_duration)))
 
         ### Val ###
         # 매 val_interval 에폭마다, 마지막 5에폭 이후 validation 수행
@@ -226,7 +225,7 @@ def do_training(args):
                 print("Calculating validation results...")
                 valid_images = [f for f in os.listdir(osp.join(args.data_dir, 'img/valid_split/')) if f.endswith('.jpg')]
 
-                pred_bboxes_dict = get_pred_bboxes(model, args.data_dir, valid_images, args.input_size, args.batch_size, split='valid_split')            
+                pred_bboxes_dict = get_pred_bboxes(model, args.data_dir, valid_images, args.image_size, args.batch_size, split='valid_split')            
                 gt_bboxes_dict = get_gt_bboxes(args.data_dir, json_file='ufo/valid_split.json', valid_images=valid_images)
 
                 result = calc_deteval_metrics(pred_bboxes_dict, gt_bboxes_dict)
@@ -265,11 +264,11 @@ def do_training(args):
             torch.save(model.state_dict(), ckpt_fpath)
         
         total_duration = time.time() - total_start_time
-        print('Mean loss: {:.4f} | Elapsed time: {} |'.format(
-            train_loss.avg, timedelta(seconds=epoch_duration)))
+        # print('Mean loss: {:.4f} | Elapsed time: {} |'.format(
+        #     train_loss.avg, timedelta(seconds=epoch_duration)))
 
     if args.mode == 'on':
-        wandb.alert('Training Task Finished', f"TRAIN_LOSS: {train_loss:.4f}")
+        wandb.alert('Training Task Finished', f"TRAIN_LOSS: {train_loss.avg:.4f}")
         wandb.finish()
 
 def main(args):
