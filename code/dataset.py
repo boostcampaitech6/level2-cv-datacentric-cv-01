@@ -2,6 +2,9 @@ import os.path as osp
 import math
 import json
 from PIL import Image
+import pickle
+import random
+import os
 
 import torch
 import numpy as np
@@ -336,15 +339,18 @@ def filter_vertices(vertices, labels, ignore_under=0, drop_under=0):
 class SceneTextDataset(Dataset):
     def __init__(self, root_dir,
                  split='train',
+                 json_name=None,
                  image_size=2048,
                  crop_size=1024,
                  ignore_tags=[],
                  ignore_under_threshold=10,
                  drop_under_threshold=1,
+                 custom_transform=None,
                  color_jitter=True,
                  normalize=True):
-        with open(osp.join(root_dir, 'ufo/{}.json'.format(split)), 'r') as f:
-            anno = json.load(f)
+        if json_name:
+            with open(osp.join(root_dir, f'ufo/{json_name}'), 'r') as f:
+                anno = json.load(f)
 
         self.anno = anno
         self.image_fnames = sorted(anno['images'].keys())
@@ -357,6 +363,8 @@ class SceneTextDataset(Dataset):
 
         self.drop_under_threshold = drop_under_threshold
         self.ignore_under_threshold = ignore_under_threshold
+        
+        self.custom_transform = custom_transform
 
     def __len__(self):
         return len(self.image_fnames)
@@ -401,6 +409,8 @@ class SceneTextDataset(Dataset):
         funcs = []
         if self.color_jitter:
             funcs.append(A.ColorJitter(0.5, 0.5, 0.5, 0.25))
+        if self.custom_transform:
+            funcs.append(self.custom_transform)
         if self.normalize:
             funcs.append(A.Normalize(mean=(0.5, 0.5, 0.5), std=(0.5, 0.5, 0.5)))
         transform = A.Compose(funcs)
@@ -410,3 +420,25 @@ class SceneTextDataset(Dataset):
         roi_mask = generate_roi_mask(image, vertices, labels)
 
         return image, word_bboxes, roi_mask
+
+class PickleDataset(Dataset):
+    def __init__(self, datadir, to_tensor=True):
+        self.datadir = datadir
+        self.to_tensor = to_tensor
+        self.datalist = [f for f in os.listdir(datadir) if f.endswith('.pkl')]
+ 
+    def __getitem__(self, idx):
+        with open(file=osp.join(self.datadir, f"{idx}.pkl"), mode="rb") as f:
+            data = pickle.load(f)
+            
+        image, score_map, geo_map, roi_mask = data
+        if self.to_tensor:
+            image = torch.Tensor(image)
+            score_map = torch.Tensor(score_map)
+            geo_map = torch.Tensor(geo_map)
+            roi_mask = torch.Tensor(roi_mask)
+
+        return image, score_map, geo_map, roi_mask
+
+    def __len__(self):
+        return len(self.datalist)

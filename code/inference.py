@@ -21,8 +21,9 @@ def parse_args():
 
     # Conventional args
     parser.add_argument('--data_dir', default=os.environ.get('SM_CHANNEL_EVAL', '../data/medical'))
-    parser.add_argument('--model_dir', default=os.environ.get('SM_CHANNEL_MODEL', 'trained_models'))
-    parser.add_argument('--output_dir', default=os.environ.get('SM_OUTPUT_DATA_DIR', 'predictions'))
+    # parser.add_argument('--model_dir', default=os.environ.get('SM_CHANNEL_MODEL', 'trained_models'))
+    parser.add_argument('--model_dir', type=str, default="/data/ephemeral/home/level2-cv-datacentric-cv-01/code/trained_models/1000e_adam_cosine_0.001_pickle_is[2048]_cs[1024]_aug['CJ', 'GB', 'N']")
+    # parser.add_argument('--output_dir', default=os.environ.get('SM_OUTPUT_DATA_DIR', 'predictions'))
 
     parser.add_argument('--device', default='cuda' if cuda.is_available() else 'cpu')
     parser.add_argument('--input_size', type=int, default=2048)
@@ -67,10 +68,17 @@ def main(args):
     model = EAST(pretrained=False).to(args.device)
 
     # Get paths to checkpoint files
-    ckpt_fpath = osp.join(args.model_dir, 'latest.pth')
+    best_checkpoint_fpath = osp.join(args.model_dir, 'best.pth')
+    if os.path.isfile(best_checkpoint_fpath):
+        print('best checkpoint found')
+        ckpt_fpath = best_checkpoint_fpath
+    else:
+        print('no best checkpoint found')
+        ckpt_fpath = osp.join(args.model_dir, 'latest.pth')
 
-    if not osp.exists(args.output_dir):
-        os.makedirs(args.output_dir)
+    # if not osp.exists(args.output_dir):
+        # print('no checkpoint found')
+        # os.makedirs(args.output_dir)
 
     print('Inference in progress')
 
@@ -80,7 +88,7 @@ def main(args):
     ufo_result['images'].update(split_result['images'])
 
     output_fname = 'output.csv'
-    with open(osp.join(args.output_dir, output_fname), 'w') as f:
+    with open(osp.join(args.model_dir, output_fname), 'w') as f:
         json.dump(ufo_result, f, indent=4)
 
 

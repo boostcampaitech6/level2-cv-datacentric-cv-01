@@ -121,6 +121,8 @@ data
 *.sh~
 
 # 추가
+*.csv
 code/pths
 code/predictions
 code/wandb
+code/trained_models
