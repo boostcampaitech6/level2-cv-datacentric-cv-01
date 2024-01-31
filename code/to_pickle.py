@@ -24,8 +24,11 @@ def main():
     
     # image_size = [1024]
     image_size = [1024, 1536, 2048]
-    crop_size = [256, 512, 1024, 2048]
-    aug_select = ['CJ','GB','N']
+    crop_size = [1024]
+    aug_select = ['CJ','GB','HSV','N']
+    
+    # set fold number
+    fold=0
     
     custom_augmentation = []
     for s in aug_select:
@@ -44,7 +47,7 @@ def main():
             train_dataset = SceneTextDataset(
                     root_dir=data_dir,
                     split='train',
-                    json_name='train_split.json',
+                    json_name=f'train{fold}.json',
                     image_size=i_size,
                     crop_size=c_size,
                     ignore_tags=ignore_tags,
