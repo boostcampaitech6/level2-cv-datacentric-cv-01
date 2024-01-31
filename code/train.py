@@ -27,7 +27,7 @@ def parse_args():
     parser = ArgumentParser()
 
      # pkl 데이터셋 경로
-    parser.add_argument('--train_dataset_dir', type=str, default="/data/ephemeral/home/level2-cv-datacentric-cv-01/data/medical/pickle/[1024, 1536, 2048]_cs[256, 512, 1024, 2048]_aug['CJ', 'GB', 'N']/train")
+    parser.add_argument('--train_dataset_dir', type=str, default="/data/ephemeral/home/level2-cv-datacentric-cv-01/data/medical/pickle/[1024, 1536, 2048]_cs[256, 512, 1024, 2048]_aug['CJ', 'GB', 'N']/train/")
     parser.add_argument('--data_dir', type=str, default=os.environ.get('SM_CHANNEL_TRAIN', '../data/medical'))
     parser.add_argument('--model_dir', type=str, default=os.environ.get('SM_MODEL_DIR', 'trained_models'))
     parser.add_argument('--seed', type=int, default=137)
@@ -54,7 +54,7 @@ def parse_args():
         args.data_name = 'original'
         args.save_dir = os.path.join(args.model_dir, f'{args.max_epoch}e_{args.optimizer}_{args.scheduler}_{args.learning_rate}')
     elif args.data == 'pickle':
-        args.data_name = args.train_dataset_dir.split('/')[-2]
+        args.data_name = args.train_dataset_dir.split('/')[-3]
         args.save_dir = os.path.join(args.model_dir, f'{args.max_epoch}e_{args.optimizer}_{args.scheduler}_{args.learning_rate}_{args.data_name}')
     os.makedirs(args.save_dir, exist_ok=True)
 
@@ -218,7 +218,7 @@ def do_training(args):
                 print("Calculating validation results...")
                 valid_images = [f for f in os.listdir(osp.join(args.data_dir, 'img/valid_split/')) if f.endswith('.jpg')]
 
-                pred_bboxes_dict = get_pred_bboxes(model, args.data_dir, valid_images, args.image_size, args.batch_size, split='valid_split')            
+                pred_bboxes_dict = get_pred_bboxes(model, args.data_dir, valid_images, args.input_size, args.batch_size, split='valid_split')            
                 gt_bboxes_dict = get_gt_bboxes(args.data_dir, json_file='ufo/valid_split.json', valid_images=valid_images)
 
                 result = calc_deteval_metrics(pred_bboxes_dict, gt_bboxes_dict)
