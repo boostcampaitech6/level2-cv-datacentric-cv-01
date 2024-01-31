@@ -5,6 +5,7 @@ from PIL import Image
 import pickle
 import random
 import os
+import time 
 
 import torch
 import numpy as np
@@ -442,3 +443,91 @@ class PickleDataset(Dataset):
 
     def __len__(self):
         return len(self.datalist)
+    
+class COCOSceneTextDataset(Dataset):
+    def __init__(self, root_dir,
+                 split='train',
+                 json_name=None,
+                 image_size=2048,
+                 crop_size=1024,
+                 ignore_tags=[],
+                 ignore_under_threshold=10,
+                 drop_under_threshold=1,
+                 custom_transform=None,
+                 color_jitter=True,
+                 normalize=True):
+        if json_name:
+            with open(osp.join(root_dir, f'ufo/{json_name}'), 'r') as f:
+                anno = json.load(f)
+
+        self.anno = anno
+        # print(dict(zip(range(len(anno['images'])),anno['images'])))
+        # print(anno['images'])
+        # self.image_fnames = sorted(anno['file_name'].keys())
+        self.image_fnames = sorted([x['file_name'] for x in anno['images']])
+        self.image_dir = osp.join(root_dir, 'img', split)
+
+        self.image_size, self.crop_size = image_size, crop_size
+        self.color_jitter, self.normalize = color_jitter, normalize
+
+        self.ignore_tags = ignore_tags
+
+        self.drop_under_threshold = drop_under_threshold
+        self.ignore_under_threshold = ignore_under_threshold
+        
+        self.custom_transform = custom_transform
+
+    def __len__(self):
+        return len(self.image_fnames)
+
+    def __getitem__(self, idx):
+        image_fname = self.image_fnames[idx]
+        image_fpath = osp.join(self.image_dir, image_fname)
+
+        vertices, labels = [], []
+        for word_info in self.anno['annotations']:
+            # word_tags = word_info['tags'] # COCO format has no tags
+            vertices.append(np.array(word_info['bbox']))
+            labels.append(int(not word_info['iscrowd']))
+        vertices, labels = np.array(vertices, dtype=np.float32), np.array(labels, dtype=np.int64)
+        
+        # vertices, labels = filter_vertices(
+        #     vertices,
+        #     labels,
+        #     ignore_under=self.ignore_under_threshold,
+        #     drop_under=self.drop_under_threshold
+        # )
+        
+        image = Image.open(image_fpath)
+        if image.mode != 'RGB':
+            image = image.convert('RGB')
+
+        # cal image resize, crop ratio
+        h, w = image.height, image.width
+        ratio = self.image_size / max(h, w)
+        if w > h:
+            h, w = self.image_size, int(h * ratio)
+        else:
+            h, w = int(w * ratio), self.image_size
+ 
+        trans = A.Compose([
+            A.Resize(h, w),
+            A.Rotate(),
+            # A.RandomCrop()
+        ])
+        image = trans(image = np.array(image))['image']
+        vertices = trans(image = vertices)['image']
+
+        funcs = []
+        if self.color_jitter:
+            funcs.append(A.ColorJitter(0.5, 0.5, 0.5, 0.25))
+        if self.custom_transform:
+            funcs.append(self.custom_transform)
+        if self.normalize:
+            funcs.append(A.Normalize(mean=(0.5, 0.5, 0.5), std=(0.5, 0.5, 0.5)))
+        transform = A.Compose(funcs)
+        
+        image = transform(image=np.array(image))['image']
+        word_bboxes = np.reshape(vertices, (-1, 4, 2))
+        roi_mask = generate_roi_mask(image, vertices, labels)
+        return image, word_bboxes, roi_mask

@@ -15,7 +15,7 @@ from tqdm import tqdm
 import wandb
 
 from east_dataset import EASTDataset
-from dataset import SceneTextDataset, PickleDataset
+from dataset import SceneTextDataset, PickleDataset, COCOSceneTextDataset
 from model import EAST
 from deteval import calc_deteval_metrics
 from utils import get_gt_bboxes, get_pred_bboxes, seed_everything, AverageMeter
@@ -27,7 +27,7 @@ def parse_args():
     parser = ArgumentParser()
 
      # pkl 데이터셋 경로
-    parser.add_argument('--train_dataset_dir', type=str, default="/data/ephemeral/home/level2-cv-datacentric-cv-01/data/medical/pickle/[1024, 1536, 2048]_cs[256, 512, 1024, 2048]_aug['CJ', 'GB', 'N']/train")
+    parser.add_argument('--train_dataset_dir', type=str, default="/data/ephemeral/home/level2-cv-datacentric-cv-01/data/medical/img/train")
     parser.add_argument('--data_dir', type=str, default=os.environ.get('SM_CHANNEL_TRAIN', '../data/medical'))
     parser.add_argument('--model_dir', type=str, default=os.environ.get('SM_MODEL_DIR', 'trained_models'))
     parser.add_argument('--seed', type=int, default=137)
@@ -36,14 +36,14 @@ def parse_args():
     parser.add_argument('--num_workers', type=int, default=8)
     parser.add_argument('--image_size', type=int, default=2048)
     parser.add_argument('--input_size', type=int, default=1024)
-    parser.add_argument('--batch_size', type=int, default=4)
+    parser.add_argument('--batch_size', type=int, default=8)
     parser.add_argument('--learning_rate', type=float, default=1e-3)
     parser.add_argument('--max_epoch', type=int, default=150)
     parser.add_argument('--save_interval', type=int, default=1)
     parser.add_argument('--ignore_tags', type=list, default=['masked', 'excluded-region', 'maintable', 'stamp'])
     parser.add_argument('-m', '--mode', type=str, default='on', help='wandb logging mode(on: online, off: disabled)')
     parser.add_argument('-p', '--project', type=str, default='datacentric', help='wandb project name')
-    parser.add_argument('-d', '--data', default='pickle', type=str, help='description about dataset', choices=['original', 'pickle'])
+    parser.add_argument('-d', '--data', default='coco', type=str, help='description about dataset', choices=['original', 'pickle', 'coco'])
     parser.add_argument("--optimizer", type=str, default='Adam', choices=['adam', 'adamW'])
     parser.add_argument("--scheduler", type=str, default='cosine', choices=['multistep', 'cosine'])
     parser.add_argument("--resume", type=str, default=None, choices=[None, 'resume', 'finetune'])
@@ -56,6 +56,11 @@ def parse_args():
     elif args.data == 'pickle':
         args.data_name = args.train_dataset_dir.split('/')[-2]
         args.save_dir = os.path.join(args.model_dir, f'{args.max_epoch}e_{args.optimizer}_{args.scheduler}_{args.learning_rate}_{args.data_name}')
+    elif args.data == 'coco' :
+        args.data_name = 'coco'
+        args.save_dir = os.path.join(args.model_dir, f'{args.max_epoch}e_{args.optimizer}_{args.scheduler}_{args.learning_rate}_coco')
+    
+        
     os.makedirs(args.save_dir, exist_ok=True)
 
     if args.input_size % 32 != 0:
@@ -73,14 +78,23 @@ def do_training(args):
             json_name='train_split.json',
             image_size=args.image_size,
             crop_size=args.input_size,
-            ignore_tags=args.ignore_tags,
-            pin_memory=True,
+            ignore_tags=args.ignore_tags
         )
         train_dataset = EASTDataset(train_dataset)
         
     elif args.data == 'pickle':
         train_dataset = PickleDataset(args.train_dataset_dir)
-        
+
+    elif args.data == 'coco':
+        train_dataset = COCOSceneTextDataset(
+            args.data_dir,
+            split='train_split_coco',
+            json_name='train_split_coco.json',
+            image_size=args.image_size,
+            crop_size=args.input_size,
+            ignore_tags=args.ignore_tags
+        )
+        train_dataset = EASTDataset(train_dataset)    
     
     train_num_batches = math.ceil(len(train_dataset) / args.batch_size)
     train_loader = DataLoader(
@@ -218,7 +232,7 @@ def do_training(args):
                 print("Calculating validation results...")
                 valid_images = [f for f in os.listdir(osp.join(args.data_dir, 'img/valid_split/')) if f.endswith('.jpg')]
 
-                pred_bboxes_dict = get_pred_bboxes(model, args.data_dir, valid_images, args.image_size, args.batch_size, split='valid_split')            
+                pred_bboxes_dict = get_pred_bboxes(model, args.data_dir, valid_images, 1024, args.batch_size, split='valid_split')            
                 gt_bboxes_dict = get_gt_bboxes(args.data_dir, json_file='ufo/valid_split.json', valid_images=valid_images)
 
                 result = calc_deteval_metrics(pred_bboxes_dict, gt_bboxes_dict)
@@ -261,6 +275,7 @@ def do_training(args):
         #     train_loss.avg, timedelta(seconds=epoch_duration)))
 
     if args.mode == 'on':
+        wandb.run.summary['best_f1'] = best_f1_score
         wandb.alert('Training Task Finished', f"TRAIN_LOSS: {train_loss.avg:.4f}")
         wandb.finish()
 
