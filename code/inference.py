@@ -22,7 +22,7 @@ def parse_args():
     # Conventional args
     parser.add_argument('--data_dir', default=os.environ.get('SM_CHANNEL_EVAL', '../data/medical'))
     # parser.add_argument('--model_dir', default=os.environ.get('SM_CHANNEL_MODEL', 'trained_models'))
-    parser.add_argument('--model_dir', type=str, default="/data/ephemeral/home/level2-cv-datacentric-cv-01/code/trained_models/1000e_adam_cosine_0.001_pickle_is[2048]_cs[1024]_aug['CJ', 'GB', 'N']")
+    parser.add_argument('--model_dir', type=str, default="/data/ephemeral/home/level2-cv-datacentric-cv-01/code/trained_models/30e_adam_cosine_0.001_[1024, 1536, 2048, 4096, 8192]_cs[1024]_aug['CJ', 'GB', 'HSV', 'N']/")
     # parser.add_argument('--output_dir', default=os.environ.get('SM_OUTPUT_DATA_DIR', 'predictions'))
 
     parser.add_argument('--device', default='cuda' if cuda.is_available() else 'cpu')

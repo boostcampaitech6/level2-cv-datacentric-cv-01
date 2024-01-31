@@ -26,18 +26,18 @@ def parse_args():
     parser = ArgumentParser()
 
      # pkl 데이터셋 경로
-    parser.add_argument('--train_dataset_dir', type=str, default="/data/ephemeral/home/level2-cv-datacentric-cv-01/data/medical/pickle/[2048]_cs[1024]_aug['CJ', 'GB', 'N']/train")
+    parser.add_argument('--train_dataset_dir', type=str, default="/data/ephemeral/home/level2-cv-datacentric-cv-01/data/medical/pickle/[1024, 1536, 2048, 4096, 8192]_cs[1024]_aug['CJ', 'GB', 'HSV', 'N']/train/")
     parser.add_argument('--data_dir', type=str, default=os.environ.get('SM_CHANNEL_TRAIN', '../data/medical'))
     parser.add_argument('--model_dir', type=str, default=os.environ.get('SM_MODEL_DIR', 'trained_models'))
     parser.add_argument('--seed', type=int, default=137)
-    parser.add_argument('--val_interval', type=int, default=5)
+    parser.add_argument('--val_interval', type=int, default=10)
     parser.add_argument('--device', default='cuda:0' if cuda.is_available() else 'cpu')
     parser.add_argument('--num_workers', type=int, default=8)
     parser.add_argument('--image_size', type=int, default=2048)
     parser.add_argument('--input_size', type=int, default=1024)
     parser.add_argument('--batch_size', type=int, default=4)
     parser.add_argument('--learning_rate', type=float, default=1e-3)
-    parser.add_argument('--max_epoch', type=int, default=150)
+    parser.add_argument('--max_epoch', type=int, default=100)
     parser.add_argument('--save_interval', type=int, default=1)
     parser.add_argument('--ignore_tags', type=list, default=['masked', 'excluded-region', 'maintable', 'stamp'])
     parser.add_argument('-m', '--mode', type=str, default='on', help='wandb logging mode(on: online, off: disabled)')
@@ -53,7 +53,7 @@ def parse_args():
         args.data_name = 'original'
         args.save_dir = os.path.join(args.model_dir, f'{args.max_epoch}e_{args.optimizer}_{args.scheduler}_{args.learning_rate}')
     elif args.data == 'pickle':
-        args.data_name = args.train_dataset_dir.split('/')[-2]
+        args.data_name = args.train_dataset_dir.split('/')[-3]
         args.save_dir = os.path.join(args.model_dir, f'{args.max_epoch}e_{args.optimizer}_{args.scheduler}_{args.learning_rate}_{args.data_name}')
     os.makedirs(args.save_dir, exist_ok=True)
 
@@ -122,6 +122,10 @@ def do_training(args):
     elif args.resume == "finetune":
         checkpoint = torch.load(osp.join(args.save_dir, "best.pth"))
         model.load_state_dict(checkpoint)
+        
+    # model load
+    checkpoint = torch.load("/data/ephemeral/home/level2-cv-datacentric-cv-01/code/trained_models/best_origin_srx4_finetuned_from_0.91.pth", map_location=lambda storage, loc: storage.cuda(0))
+    model.load_state_dict(checkpoint)
     
     ### Optimizer ###
     if args.optimizer == "adam":
@@ -131,7 +135,7 @@ def do_training(args):
     
     ### Scheduler ###
     if args.scheduler == "multistep":
-        scheduler = lr_scheduler.MultiStepLR(optimizer, milestones=[args.max_epoch // 2, args.max_epoch // 2 * 2], gamma=0.1)
+        scheduler = lr_scheduler.MultiStepLR(optimizer, milestones=[args.max_epoch // 2], gamma=0.1)
     elif args.scheduler == "cosine":
         scheduler = lr_scheduler.CosineAnnealingLR(optimizer, T_max=args.max_epoch, eta_min=0)
         
@@ -177,7 +181,7 @@ def do_training(args):
                     'train iou loss': extra_info['iou_loss']
                 }
                 pbar.set_postfix(train_dict)
-                if args.mode == 'on':    
+                if args.mode == 'on':
                     wandb.log(train_dict, step=epoch)
 
         scheduler.step()
@@ -188,7 +192,7 @@ def do_training(args):
 
         ### Val ###
         # 매 val_interval 에폭마다, 마지막 5에폭 이후 validation 수행
-        if (epoch + 1) % args.val_interval == 0 or epoch >= args.max_epoch - 5:
+        if (epoch + 1) % args.val_interval == 0 or epoch >= args.max_epoch - 30:
             with torch.no_grad():
                 
                 ''' 아래 코드는 val loss를 위한 코드입니다.'''
@@ -225,7 +229,7 @@ def do_training(args):
                 print("Calculating validation results...")
                 valid_images = [f for f in os.listdir(osp.join(args.data_dir, 'img/valid_split/')) if f.endswith('.jpg')]
 
-                pred_bboxes_dict = get_pred_bboxes(model, args.data_dir, valid_images, args.image_size, args.batch_size, split='valid_split')            
+                pred_bboxes_dict = get_pred_bboxes(model, args.data_dir, valid_images, 1024, args.batch_size, split='valid_split')            
                 gt_bboxes_dict = get_gt_bboxes(args.data_dir, json_file='ufo/valid_split.json', valid_images=valid_images)
 
                 result = calc_deteval_metrics(pred_bboxes_dict, gt_bboxes_dict)

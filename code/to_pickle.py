@@ -12,21 +12,33 @@ def main():
     data_dir = '/data/ephemeral/home/level2-cv-datacentric-cv-01/data/medical'
     ignore_tags = ['masked', 'excluded-region', 'maintable', 'stamp']
     custom_augmentation_dict = {
-        'CJ': A.ColorJitter(brightness=0.2, contrast=0.2, saturation=0.2, hue=0.2, p=0.5),
+        'CJ': A.ColorJitter(0.2, 0.2, 0.2, 0.2, p=0.5),
+        'Default_CJ': A.ColorJitter(0.5, 0.5, 0.5, 0.25, p=0.5),
         'GB': A.GaussianBlur(blur_limit=(3, 7), p=0.5),
         'B': A.Blur(blur_limit=7, p=0.5),
         'GN': A.GaussNoise(p=0.5),
         'HSV': A.HueSaturationValue(hue_shift_limit=20, sat_shift_limit=30, val_shift_limit=20, p=0.5),
         'RBC': A.RandomBrightnessContrast(brightness_limit=0.2, contrast_limit=0.2, p=0.5),
+        'C': A.CLAHE(p=0.5),
+        'S&P': A.OneOf([
+                A.MultiplicativeNoise(),
+                A.MultiplicativeNoise(multiplier=(0.5, 1.5), per_channel=True),
+                ], p=0.5),
         'N': A.Normalize(mean=(0.7760271717131425, 0.7722186515548635, 0.7670997062399484), 
-                        std=(0.17171108542242774, 0.17888224507630185, 0.18678791254805846), p=1.0)
+                        std=(0.17171108542242774, 0.17888224507630185, 0.18678791254805846), p=1.0),
+        'Default_N': A.Normalize(mean=(0.5, 0.5, 0.5), std=(0.5, 0.5, 0.5), p=1.0)
     }
-    
+
     # image_size = [1024]
-    image_size = [1024, 1536, 2048]
-    crop_size = [256, 512, 1024, 2048]
-    aug_select = ['CJ','GB','N']
-    
+    image_size = [1024, 1536, 2048, 4096, 8192]
+    crop_size = [1024]
+    # aug_select = ['CJ','N']
+    # aug_select = ['CJ','C','N']
+    aug_select = ['CJ','GB', 'HSV','N']
+    # aug_select = ['Default_CJ','GB','Default_N']
+    # aug_select = ['Default_CJ','GN','Default_N']
+    # aug_select = ['Default_CJ','HSV','Default_N']
+
     custom_augmentation = []
     for s in aug_select:
         custom_augmentation.append(custom_augmentation_dict[s])
@@ -57,8 +69,9 @@ def main():
             ds = len(train_dataset)
             for k in tqdm(range(ds)):
                 data = train_dataset.__getitem__(k)
-                with open(file=osp.join(data_dir, pkl_dir, f"{ds*i+ds*j+k}.pkl"), mode="wb") as f:
-                    pickle.dump(data, f)
+                if data is not None:
+                    with open(file=osp.join(data_dir, pkl_dir, f"{ds*i+ds*j+k}.pkl"), mode="wb") as f:
+                        pickle.dump(data, f)
             
 if __name__ == '__main__':
     main()
