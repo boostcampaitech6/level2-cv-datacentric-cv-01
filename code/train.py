@@ -2,6 +2,7 @@ import os
 import os.path as osp
 import time
 import math
+import json
 import random
 from datetime import timedelta
 from argparse import ArgumentParser
@@ -31,6 +32,7 @@ def parse_args():
     parser.add_argument('--data_dir', type=str, default=os.environ.get('SM_CHANNEL_TRAIN', '../data/medical'))
     parser.add_argument('--model_dir', type=str, default=os.environ.get('SM_MODEL_DIR', 'trained_models'))
     parser.add_argument('--seed', type=int, default=137)
+    parser.add_argument('--fold', type=int, default=0)
     parser.add_argument('--val_interval', type=int, default=5)
     parser.add_argument('--device', default='cuda:0' if cuda.is_available() else 'cpu')
     parser.add_argument('--num_workers', type=int, default=8)
@@ -69,8 +71,8 @@ def do_training(args):
     if args.data == 'original':
         train_dataset = SceneTextDataset(
             args.data_dir,
-            split='train_split',
-            json_name='train_split.json',
+            split='train',
+            json_name=f'train{args.fold}.json',
             image_size=args.image_size,
             crop_size=args.input_size,
             ignore_tags=args.ignore_tags,
@@ -96,8 +98,8 @@ def do_training(args):
     '''
     val_dataset = SceneTextDataset(
         args.data_dir,
-        split='valid_split',
-        train_val='valid_split.json',
+        split='valid',
+        train_val=f'valid{fold}.json',
         image_size=args.image_size,
         crop_size=args.image_size,
         ignore_tags=args.ignore_tags,
@@ -216,10 +218,13 @@ def do_training(args):
                 
                 ''' 아래 코드는 val f1 score를 위한 코드입니다. '''
                 print("Calculating validation results...")
-                valid_images = [f for f in os.listdir(osp.join(args.data_dir, 'img/valid_split/')) if f.endswith('.jpg')]
+                valid_json_file = f'ufo/valid{args.fold}.json'
+                with open(osp.join(args.data_dir, valid_json_file), 'r', encoding='utf-8') as file:
+                    data = json.load(file)
+                valid_images = list(data['images'].keys())
 
-                pred_bboxes_dict = get_pred_bboxes(model, args.data_dir, valid_images, args.input_size, args.batch_size, split='valid_split')            
-                gt_bboxes_dict = get_gt_bboxes(args.data_dir, json_file='ufo/valid_split.json', valid_images=valid_images)
+                pred_bboxes_dict = get_pred_bboxes(model, args.data_dir, valid_images, args.input_size, args.batch_size, split='train')            
+                gt_bboxes_dict = get_gt_bboxes(args.data_dir, json_file=valid_json_file, valid_images=valid_images)
 
                 result = calc_deteval_metrics(pred_bboxes_dict, gt_bboxes_dict)
                 total_result = result['total']

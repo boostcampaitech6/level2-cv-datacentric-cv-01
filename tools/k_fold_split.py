@@ -4,7 +4,6 @@ from sklearn.model_selection import KFold
 import argparse
 
 def main():
-    # argparse를 이용하여 명령줄 인자 정의
     parser = argparse.ArgumentParser(description="KFold split of image data")
     parser.add_argument('--seed', type=int, default=137, help="Random seed for KFold")
     parser.add_argument('--folds', type=int, default=5, help="Number of folds for KFold")
@@ -18,7 +17,6 @@ def main():
     root_dir = args.root_dir
     json_file = osp.join(root_dir, args.json_file)
 
-    # JSON 파일을 읽어 들임
     with open(json_file, 'r', encoding='utf-8') as file:
         data = json.load(file)
 
@@ -37,9 +35,9 @@ def main():
         val_data = {'images': val_images}
         
         # JSON 파일 생성
-        with open(osp.join(root_dir, f'train{fold}.json'), 'w', encoding='utf-8') as file:
+        with open(osp.join(root_dir, f'ufo/train{fold}.json'), 'w', encoding='utf-8') as file:
             json.dump(train_data, file, indent=4, ensure_ascii=False)
-        with open(osp.join(root_dir, f'val{fold}.json'), 'w', encoding='utf-8') as file:
+        with open(osp.join(root_dir, f'ufo/valid{fold}.json'), 'w', encoding='utf-8') as file:
             json.dump(val_data, file, indent=4, ensure_ascii=False)
         
         print(f"number of fold{fold} train images : ", len(train_images))
